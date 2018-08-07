@@ -95,6 +95,10 @@ init_database(wiser_env *env, const char *db_path)
   sqlite3_prepare(env->db,
                   "ROLLBACK;",
                   -1, &env->rollback_st, NULL);
+  sqlite3_prepare(env->db,
+    "SELECT LENGTH(body) FROM documents WHERE id = ?;",
+    -1, &env->get_document_body_size_st, NULL);
+
   return 0;
 }
 
@@ -120,6 +124,7 @@ fin_database(wiser_env *env)
   sqlite3_finalize(env->begin_st);
   sqlite3_finalize(env->commit_st);
   sqlite3_finalize(env->rollback_st);
+  sqlite3_finalize(env->get_document_body_size_st);
   sqlite3_close(env->db);
 }
 
@@ -433,6 +438,29 @@ db_get_document_count(const wiser_env *env)
   } else {
     return -1;
   }
+}
+
+/**
+ * 根据文档编号获取文档的大小
+ * @param[in] env 存储着应用程序运行环境的结构体
+ * @param[in] document_id 文档编号
+ * @param[out] document_size 文档的大小
+ */
+int
+db_get_document_size(const wiser_env *env, int document_id,
+                     unsigned int * const document_size)
+{
+  int rc;
+  
+  sqlite3_reset(env->get_document_body_size_st);
+  sqlite3_bind_int(env->get_document_body_size_st, 1, document_id);
+  
+  rc = sqlite3_step(env->get_document_body_size_st);
+  if (rc == SQLITE_ROW) {
+    *document_size = (int)sqlite3_column_int(env->get_document_body_size_st, 0);  
+  }
+ 
+  return 0;
 }
 
 /**

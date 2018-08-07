@@ -32,6 +32,8 @@ int db_replace_settings(const wiser_env *env, const char *key,
                         int key_size,
                         const char *value, int value_size);
 int db_get_document_count(const wiser_env *env);
+int db_get_document_size(const wiser_env *env, int document_id,
+                         unsigned int * const document_size);
 int begin(const wiser_env *env);
 int commit(const wiser_env *env);
 int rollback(const wiser_env *env);

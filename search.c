@@ -26,6 +26,7 @@ typedef struct {
   int document_id;           /* 检索出的文档编号 */
   double score;              /* 检索得分 */
   UT_hash_handle hh;         /* 用于将该结构体转化为哈希表 */
+  unsigned int body_size;    /* 文档大小 */
 } search_results;
 
 /**
@@ -42,25 +43,26 @@ query_token_value_docs_count_desc_sort(query_token_value *a,
 }
 
 /**
- * 根据得分比较两条检索结果
- * @param[in] a 检索结果a的数据
- * @param[in] b 检索结果b的数据
- * @return 得分的大小关系
+ * 比较两条检索结果的文档大小
+ * @param[in] a 一条检索结果
+ * @param[in] b 另一条检索结果
+ * @return 文档的大小关系
  */
 static int
-search_results_score_desc_sort(search_results *a, search_results *b)
-{
-  return (b->score > a->score) ? 1 : (b->score < a->score) ? -1 : 0;
+search_results_body_size_desc_sort(search_results *a, search_results *b) {
+    return (b->body_size > a->body_size) ? 1 :
+           (b->body_size < a->body_size) ? -1 : 0;
 }
 
 /**
  * 将文档添加到检索结果中
+ * @param[in] env 存储着应用程序运行环境的结构体
  * @param[in] results 指向检索结果的指针
  * @param[in] document_id 要添加的文档的编号
  * @param[in] score 得分
  */
 static void
-add_search_result(search_results **results, const int document_id,
+add_search_result(wiser_env *env, search_results **results, const int document_id,
                   const double score)
 {
   search_results *r;
@@ -73,6 +75,7 @@ add_search_result(search_results **results, const int document_id,
     if ((r = malloc(sizeof(search_results)))) {
       r->document_id = document_id;
       r->score = 0;
+      db_get_document_size(env, document_id, &r->body_size);
       HASH_ADD_INT(*results, document_id, r);
     }
   }
@@ -83,12 +86,13 @@ add_search_result(search_results **results, const int document_id,
 
 /**
  * 进行短语检索
+ * @param[in] env 存储着应用程序运行环境的结构体
  * @param[in] query_tokens 从查询中提取出的词元信息
  * @param[in] doc_cursors 用于检索文档的游标的集合
  * @return 检索出的短语数
  */
 static int
-search_phrase(const query_token_hash *query_tokens,
+search_phrase(wiser_env *env, const query_token_hash *query_tokens,
               doc_search_cursor *doc_cursors)
 {
   int n_positions = 0;
@@ -260,12 +264,12 @@ search_docs(wiser_env *env, search_results **results,
       } else {
         int phrase_count = -1;
         if (env->enable_phrase_search) {
-          phrase_count = search_phrase(tokens, cursors);
+          phrase_count = search_phrase(env, tokens, cursors);
         }
         if (phrase_count) {
           double score = calc_tf_idf(tokens, cursors, n_tokens,
                                      env->indexed_count);
-          add_search_result(results, doc_id, score);
+          add_search_result(env, results, doc_id, score);
         }
         cursors[0].current = cursors[0].current->next;
       }
@@ -280,7 +284,7 @@ exit:
   }
   free_inverted_index(tokens);
 
-  HASH_SORT(*results, search_results_score_desc_sort);
+  HASH_SORT(*results, search_results_body_size_desc_sort);
 }
 
 /**
