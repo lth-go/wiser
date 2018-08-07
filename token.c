@@ -183,21 +183,49 @@ text_to_postings_lists(wiser_env *env,
   /* FIXME: now same document update is broken. */
   int t_len, position = 0;
   const UTF32Char *t = text, *text_end = text + text_len;
-
-  inverted_index_hash *buffer_postings = NULL;
+  int last_t_len = 0, last_position = 0;
+  const UTF32Char *last_t = NULL;
+    
+  inverted_index_hash *buffer_postings = NULL; 
 
   for (; (t_len = ngram_next(t, text_end, n, &t)); t++, position++) {
-    /* 检索时，忽略掉由t中长度不足N-gram的最后几个字符构成的词元 */
-    if (t_len >= n || document_id) {
+    int filtered_t_len = 0, filtered_position;
+    const UTF32Char *filtered_t = NULL;
+      
+    /* 在检索时，基本上是当position可以被n整除时才取出词元 */
+    if (document_id || ((position % n == 0) && t_len >= n)) {
+        filtered_t_len = t_len;
+        filtered_t = t;
+        filtered_position = position;
+    /* 但是，要保证最后一个词元含有n个字符 */
+    } else if (t_len < n) {
+        if (last_t_len && last_t) {
+          filtered_t_len = last_t_len;
+          filtered_t = last_t;
+          filtered_position = last_position;
+        } else {
+            break;
+        }
+    }
+
+    if (filtered_t_len && filtered_t) {
       int retval, t_8_size;
       char t_8[n * MAX_UTF8_SIZE];
-
-      utf32toutf8(t, t_len, t_8, &t_8_size);
-
+      
+      utf32toutf8(filtered_t, filtered_t_len, t_8, &t_8_size);
+      
       retval = token_to_postings_list(env, document_id, t_8, t_8_size,
-                                      position, &buffer_postings);
+                                      filtered_position, &buffer_postings);
+
       if (retval) { return retval; }
-    }
+        
+        last_t_len = 0;
+        last_t = NULL;
+      } else {
+        last_t_len = t_len;
+        last_t = t;
+        last_position = position;
+      }
   }
 
   if (*postings) {
