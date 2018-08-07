@@ -40,16 +40,36 @@ wiser_is_ignored_char(const UTF32Char ustr)
 }
 
 /**
+ * 检查传入的UTF32的字符是否是拉丁字母
+ * @param[in] ustr 输入的字符（UTF-32） 
+ * @return 是否是拉丁字母
+ * @retval 0 不是拉丁字母
+ * @retval 1 是拉丁字母
+ */
+static int
+wiser_isalpha(const UTF32Char ustr)
+{
+  if (('A' <= ustr && ustr <= 'Z') ||
+      ('a' <= ustr && ustr <= 'z')) {
+    return 1;      
+  } else {
+    return 0;  
+  }
+}
+
+/**
  * 将输入的字符串分割为N-gram
  * @param[in] ustr 输入的字符串（UTF-8）
  * @param[in] ustr_end 输入的字符串中最后一个字符的位置
  * @param[in] n N-gram中N的取值。建议将其设为大于1的值
  * @param[out] start 词元的起始位置
+ * @param[out] next 下一个词元的起始位置
  * @return 分割出来的词元的长度
  */
 static int
 ngram_next(const UTF32Char *ustr, const UTF32Char *ustr_end,
-           unsigned int n, const UTF32Char **start)
+           unsigned int n, 
+           const UTF32Char **start, const UTF32Char **next)
 {
   int i;
   const UTF32Char *p;
@@ -57,12 +77,22 @@ ngram_next(const UTF32Char *ustr, const UTF32Char *ustr_end,
   /* 读取时跳过文本开头的空格等字符 */
   for (; ustr < ustr_end && wiser_is_ignored_char(*ustr); ustr++) {
   }
-
-  /* 不断取出最多包含n个字符的词元，直到遇到不属于索引对象的字符或到达了字符串的尾部 */
-  for (i = 0, p = ustr; i < n && p < ustr_end
-       && !wiser_is_ignored_char(*p); i++, p++) {
+   
+  if (wiser_isalpha(*ustr)) {
+    /* 将连续出现的拉丁字母视作一个词元 */
+    for (p = ustr; p < ustr_end && wiser_isalpha(*p); p++) {
+    }
+    
+    /* 将最后一个拉丁字母之后的字符算作下一个词元的开始 */
+    *next = p;
+  } else {
+      /* 取出最多包含n个字符的词元，直到遇到空格或拉丁字母，或者到达了字符串的末尾 */
+      for (i = 0, p = ustr;
+          i < n && p < ustr_end && !wiser_is_ignored_char(*p) && !wiser_isalpha(*p); i++, p++) {
+              
+      }
+      *next = ustr + 1;
   }
-
   *start = ustr;
   return p - ustr;
 }
@@ -185,12 +215,14 @@ text_to_postings_lists(wiser_env *env,
   const UTF32Char *t = text, *text_end = text + text_len;
 
   inverted_index_hash *buffer_postings = NULL;
-
-  for (; (t_len = ngram_next(t, text_end, n, &t)); t++, position++) {
+  
+  const UTF32Char *next_t = text;
+  for (;(t_len = ngram_next(t, text_end, n, &t, &next_t)); t = next_t, position++) {
     /* 检索时，忽略掉由t中长度不足N-gram的最后几个字符构成的词元 */
     if (t_len >= n || document_id) {
       int retval, t_8_size;
-      char t_8[n * MAX_UTF8_SIZE];
+      int buffer_size = uchar2utf8_size(t, t_len);
+      char t_8[buffer_size];
 
       utf32toutf8(t, t_len, t_8, &t_8_size);
 
