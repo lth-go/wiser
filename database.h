@@ -32,6 +32,9 @@ int db_replace_settings(const wiser_env *env, const char *key,
                         int key_size,
                         const char *value, int value_size);
 int db_get_document_count(const wiser_env *env);
+int token_partial_match(const wiser_env *env, const char *query,
+                        int query_len, UT_array *token_ids);
+
 int begin(const wiser_env *env);
 int commit(const wiser_env *env);
 int rollback(const wiser_env *env);

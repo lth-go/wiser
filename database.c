@@ -95,6 +95,10 @@ init_database(wiser_env *env, const char *db_path)
   sqlite3_prepare(env->db,
                   "ROLLBACK;",
                   -1, &env->rollback_st, NULL);
+  sqlite3_prepare(env->db,
+                  "SELECT token FROM tokens WHERE token like ? || '%';",
+                  -1, &env->token_partial_match_st, NULL);
+
   return 0;
 }
 
@@ -120,6 +124,7 @@ fin_database(wiser_env *env)
   sqlite3_finalize(env->begin_st);
   sqlite3_finalize(env->commit_st);
   sqlite3_finalize(env->rollback_st);
+  sqlite3_finalize(env->token_partial_match_st);
   sqlite3_close(env->db);
 }
 
@@ -433,6 +438,31 @@ db_get_document_count(const wiser_env *env)
   } else {
     return -1;
   }
+}
+
+/**
+ * 获取与指定的查询字符串部分匹配的词元的列表
+ * @param[in] env 存储着应用程序运行环境的结构体
+ * @param[in] query 查询字符串
+ * @param[in] query_len 查询字符串的长度
+ * @param[out] tokens 词元的列表
+ */
+int
+token_partial_match(const wiser_env *env, const char *query,
+                    int query_len,
+                    UT_array *tokens)
+{
+  int rc;
+  sqlite3_reset(env->token_partial_match_st);
+  sqlite3_bind_text(env->token_partial_match_st, 1, query, query_len,
+                    SQLITE_TRANSIENT);
+  while ((rc = sqlite3_step(env->token_partial_match_st)) ==
+         SQLITE_ROW) {
+    char *title = (char *)sqlite3_column_text(env->token_partial_match_st,
+                  0);
+    utarray_push_back(tokens, &title);                  
+  }
+  return 0;
 }
 
 /**

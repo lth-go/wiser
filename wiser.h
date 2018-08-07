@@ -60,6 +60,7 @@ typedef struct _wiser_env {
   sqlite3_stmt *get_settings_st;
   sqlite3_stmt *replace_settings_st;
   sqlite3_stmt *get_document_count_st;
+  sqlite3_stmt *token_partial_match_st;
   sqlite3_stmt *begin_st;
   sqlite3_stmt *commit_st;
   sqlite3_stmt *rollback_st;
